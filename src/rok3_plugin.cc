@@ -347,6 +347,7 @@ void Practice()
 
 void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/)
 {
+    
     /*
      * Loading model data and initializing the system before simulation 
      */
@@ -366,7 +367,7 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
 
     //* model.urdf file based model data input to [Model* rok3_model] for using RBDL
     Model* rok3_model = new Model();
-    Addons::URDFReadFromFile("/root/.gazebo/models/rok3_model/urdf/rok3_model.urdf", rok3_model, true, true);
+    Addons::URDFReadFromFile("/home/jung/.gazebo/models/rok3_model/urdf", rok3_model, true, true);
     //↑↑↑ Check File Path ↑↑↑
     nDoF = rok3_model->dof_count - 6; // Get degrees of freedom, except position and orientation of the robot
     joint = new ROBO_JOINT[nDoF]; // Generation joint variables struct
@@ -377,14 +378,18 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
 
 
     //* setting for getting dt
-    last_update_time = model->GetWorld()->GetSimTime();
+    
+    //last_update_time = model->GetWorld()->GetSimTime();
+    #if GAZEBO_MAJOR_VERSION >= 8
+        last_update_time = model->GetWorld()->SimTime();
+    #else
+        last_update_time = model->GetWorld()->GetSimTime();
+    #endif
+
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&rok3_plugin::UpdateAlgorithm, this));
     
     
-    //* Kinematics Test
     Practice();
-    
-
 
 }
 
@@ -395,7 +400,13 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
      */
 
     //* UPDATE TIME : 1ms
-    common::Time current_time = model->GetWorld()->GetSimTime();
+    ///common::Time current_time = model->GetWorld()->GetSimTime();
+    #if GAZEBO_MAJOR_VERSION >= 8
+        common::Time current_time = model->GetWorld()->SimTime();
+    #else
+        common::Time current_time = model->GetWorld()->GetSimTime();
+    #endif
+
     dt = current_time.Double() - last_update_time.Double();
     //    cout << "dt:" << dt << endl;
     time = time + dt;
@@ -408,15 +419,21 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
     //* Read Sensors data
     GetjointData();
     
-    
-    joint[LHY].targetRadian = 10*3.14/180;
-    joint[LHR].targetRadian = 20*3.14/180;
-    joint[LHP].targetRadian = 30*3.14/180;
-    joint[LKN].targetRadian = 40*3.14/180;
-    joint[LAP].targetRadian = 50*3.14/180;
-    joint[LAR].targetRadian = 60*3.14/180;
-    
-    
+    //* Target Angles
+
+    joint[LHY].targetRadian = 10*D2R;
+    joint[LHR].targetRadian = 20*D2R;
+    joint[LHP].targetRadian = 30*D2R;
+    joint[LKN].targetRadian = 40*D2R;
+    joint[LAP].targetRadian = 50*D2R;
+    joint[LAR].targetRadian = 60*D2R;
+
+
+
+  /*First motion Complete.*/
+
+
+
     //* Joint Controller
     jointController();
 }
@@ -484,6 +501,27 @@ void gazebo::rok3_plugin::GetjointData()
      * encoder unit : [rad] and unit conversion to [deg]
      * velocity unit : [rad/s] and unit conversion to [rpm]
      */
+    
+  #if GAZEBO_MAJOR_VERSION >= 8
+
+    
+    joint[LHY].actualRadian = L_Hip_yaw_joint->Position(0);
+    joint[LHR].actualRadian = L_Hip_roll_joint->Position(0);
+    joint[LHP].actualRadian = L_Hip_pitch_joint->Position(0);
+    joint[LKN].actualRadian = L_Knee_joint->Position(0);
+    joint[LAP].actualRadian = L_Ankle_pitch_joint->Position(0);
+    joint[LAR].actualRadian = L_Ankle_roll_joint->Position(0);
+
+    joint[RHY].actualRadian = R_Hip_yaw_joint->Position(0);
+    joint[RHR].actualRadian = R_Hip_roll_joint->Position(0);
+    joint[RHP].actualRadian = R_Hip_pitch_joint->Position(0);
+    joint[RKN].actualRadian = R_Knee_joint->Position(0);
+    joint[RAP].actualRadian = R_Ankle_pitch_joint->Position(0);
+    joint[RAR].actualRadian = R_Ankle_roll_joint->Position(0);
+
+    joint[WST].actualRadian = torso_joint->Position(0);
+    
+  #else
     joint[LHY].actualRadian = L_Hip_yaw_joint->GetAngle(0).Radian();
     joint[LHR].actualRadian = L_Hip_roll_joint->GetAngle(0).Radian();
     joint[LHP].actualRadian = L_Hip_pitch_joint->GetAngle(0).Radian();
@@ -499,6 +537,8 @@ void gazebo::rok3_plugin::GetjointData()
     joint[RAR].actualRadian = R_Ankle_roll_joint->GetAngle(0).Radian();
 
     joint[WST].actualRadian = torso_joint->GetAngle(0).Radian();
+  #endif
+
 
     for (int j = 0; j < nDoF; j++) {
         joint[j].actualDegree = joint[j].actualRadian*R2D;
